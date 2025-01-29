@@ -316,6 +316,9 @@ type State = {
   // For profiling: a total count of the number of instructions executed.
   icount: bigint,
 
+  // For profiling: tracker for instruction count by op
+  opcount: Map<string, bigint>,
+
   // For SSA (phi-node) execution: keep track of recently-seen labels.j
   curlabel: string | null,
   lastlabel: string | null,
@@ -363,12 +366,14 @@ function evalCall(instr: bril.Operation, state: State): Action {
     heap: state.heap,
     funcs: state.funcs,
     icount: state.icount,
+    opcount: state.opcount,
     lastlabel: null,
     curlabel: null,
     specparent: null,  // Speculation not allowed.
   }
   let retVal = evalFunc(func, newState);
   state.icount = newState.icount;
+  state.opcount = newState.opcount;
 
   // Dynamically check the function's return value and type.
   if (!('dest' in instr)) {  // `instr` is an `EffectOperation`.
@@ -412,6 +417,12 @@ function evalCall(instr: bril.Operation, state: State): Action {
  */
 function evalInstr(instr: bril.Instruction, state: State): Action {
   state.icount += BigInt(1);
+  if (state.opcount.has(instr.op)) {
+    state.opcount.set(instr.op, state.opcount.get(instr.op)! + BigInt(1));
+  }
+  else {
+    state.opcount.set(instr.op, BigInt(1));
+  }
 
   // Check that we have the right number of arguments.
   if (instr.op !== "const") {
@@ -943,6 +954,7 @@ function evalProg(prog: bril.Program) {
     heap,
     env: newEnv,
     icount: BigInt(0),
+    opcount: new Map(),
     lastlabel: null,
     curlabel: null,
     specparent: null,
@@ -955,6 +967,9 @@ function evalProg(prog: bril.Program) {
 
   if (profiling) {
     console.error(`total_dyn_inst: ${state.icount}`);
+    for (let [op, count] of state.opcount) {
+      console.error(`op ${op}: ${count}`);
+    }
   }
 
 }
